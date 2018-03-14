@@ -3,15 +3,84 @@ var bodyParser = require('body-parser');
 var passport = require('passport');
 var authJwtController = require('./auth_jwt');
 var User = require('./Users');
+var movies = require('./movies');
 var jwt = require('jsonwebtoken');
 
 var app = express();
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({extended: false}));
 
 app.use(passport.initialize());
 
 var router = express.Router();
+
+router.route('/movies')
+    .get(authJwtController.isAuthenticated, function (req, res) {
+        movies.find(function (err, movies) {
+            if (err)
+                res.send(err);
+
+            res.json(movies);
+        });
+    });
+
+router.route('/SAVEmovies')
+    .post(authJwtController.isAuthenticated, function (req, res) {
+        if (!req.body.title || !req.body.yearReleased || !req.body.genre || !req.body.actors && req.body.actors.length) {
+            res.json({success: false, msg: 'Pass the Movie Information'});
+        }
+        else {
+            if (req.body.actors.length < 3) {
+                res.json({success: false, msg: "Please have at least 3 actors"});
+            }
+
+            else {
+                var newMov = new movies(req, res);
+                newMov.title = req.body.title;
+                newMov.yearReleased = req.body.yearReleased;
+                newMov.genre = req.body.genre;
+                newMov.actors = req.body.actors;
+
+                newMov.save(function (err, movies) {
+                    if (err)
+                        res.send(err);
+
+                    res.json(movies);
+                });
+            }
+
+        }
+    });
+
+router.route('/DELETEmovies/:title')
+    .delete(authJwtController.isAuthenticated, function (req, res) {
+        movies.findOne({title: req.params.title}, function (err, results) {
+            if (results !== null) {
+                movies.remove({title: req.params.title}).exec(function (err) {
+                    res.json({message: "Movie Deleted"});
+                });
+            }
+            else {
+                res.json({message: "ERROR: Movie not found"});
+            };
+        })
+    });
+
+
+router.route('/UPDATEmovies/:title')
+    .put(authJwtController.isAuthenticated, function (req, res) {
+        movies.findOne({title: req.params.title}, function (err, results) {
+            if (results !== null) {
+                movies.update({title: req.params.title}, req.body).exec(function (err) {
+                    res.json({message: "Movie Updated"});
+                });
+            }
+            else {
+                res.json({message: "ERROR: Movie not found"});
+            }
+        })
+    });
+
 
 router.route('/postjwt')
     .post(authJwtController.isAuthenticated, function (req, res) {
@@ -28,7 +97,7 @@ router.route('/postjwt')
 router.route('/users/:userId')
     .get(authJwtController.isAuthenticated, function (req, res) {
         var id = req.params.userId;
-        User.findById(id, function(err, user) {
+        User.findById(id, function (err, user) {
             if (err) res.send(err);
 
             var userJson = JSON.stringify(user);
@@ -46,7 +115,7 @@ router.route('/users')
         });
     });
 
-router.post('/signup', function(req, res) {
+router.post('/signup', function (req, res) {
     if (!req.body.username || !req.body.password) {
         res.json({success: false, msg: 'Please pass username and password.'});
     }
@@ -56,30 +125,30 @@ router.post('/signup', function(req, res) {
         user.username = req.body.username;
         user.password = req.body.password;
         // save the user
-        user.save(function(err) {
+        user.save(function (err) {
             if (err) {
                 // duplicate entry
                 if (err.code == 11000)
-                    return res.json({ success: false, message: 'A user with that username already exists. '});
+                    return res.json({success: false, message: 'A user with that username already exists. '});
                 else
                     return res.send(err);
             }
 
-            res.json({ message: 'User created!' });
+            res.json({message: 'User created!'});
         });
     }
 });
 
-router.post('/signin', function(req, res) {
+router.post('/signin', function (req, res) {
     var userNew = new User();
     userNew.name = req.body.name;
     userNew.username = req.body.username;
     userNew.password = req.body.password;
 
-    User.findOne({ username: userNew.username }).select('name username password').exec(function(err, user) {
+    User.findOne({username: userNew.username}).select('name username password').exec(function (err, user) {
         if (err) res.send(err);
-
-        user.comparePassword(userNew.password, function(isMatch){
+        var returnedUser = new User(user);
+        returnedUser.comparePassword(userNew.password, function (isMatch) {
             if (isMatch) {
                 var userToken = {id: user._id, username: user.username};
                 var token = jwt.sign(userToken, process.env.SECRET_KEY);

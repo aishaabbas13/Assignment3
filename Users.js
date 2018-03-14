@@ -1,8 +1,15 @@
+var dotenv = require('dotenv').config();
 var mongoose = require('mongoose');
 var Schema = mongoose.Schema;
 var bcrypt = require('bcrypt-nodejs');
 
+var db = mongoose.connection;
 mongoose.connect(process.env.DB);
+//mongoose.connect(mongoDB);
+
+//mongoose.Promise = global.Promise;
+
+db.on('error', console.error.bind(console, 'MongoDB connection error:'));
 
 // user schema
 var UserSchema = new Schema({
@@ -36,5 +43,8 @@ UserSchema.methods.comparePassword = function(password, callback) {
     });
 };
 
+
+
 // return the model
 module.exports = mongoose.model('User', UserSchema);
+//module.exports = mongoose.model('movies', movieSchema);
