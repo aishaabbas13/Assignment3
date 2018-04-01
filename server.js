@@ -4,6 +4,7 @@ var passport = require('passport');
 var authJwtController = require('./auth_jwt');
 var User = require('./Users');
 var movies = require('./movies');
+var reviews = require('./reviews');
 var jwt = require('jsonwebtoken');
 
 var app = express();
@@ -14,16 +15,76 @@ app.use(passport.initialize());
 
 var router = express.Router();
 
-router.route('/movies')
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+router.route('/reviews')
     .get(authJwtController.isAuthenticated, function (req, res) {
-        movies.find(function (err, movies) {
+        reviews.find(function (err, reviews) {
             if (err)
                 res.send(err);
 
-            res.json(movies);
+            res.json(reviews);
         });
     });
 
+router.route('/POSTreviews')
+    .post(authJwtController.isAuthenticated, function (req, res) {
+        if (!req.body.movTitle || !req.body.reviewer || !req.body.quote || !req.body.rating) {
+            res.json({success: false, msg: 'Pass the Review Information'});
+        }
+
+            else {
+            var title= req.header.title;
+            movies.findOne({title: req.body.movTitle}).select('title').exec(function (err, movies) {
+                if (err) {return res.send(err);}
+
+                if (movies) {
+                    var newRev = new reviews(req.body);
+
+                    newRev.save(function (err) {
+                        if (err) {
+                            return res.send(err);
+                        }
+                        res.json({message: 'Review is saved.'});
+
+                    });
+                }
+                else {
+                    res.json({success: false, message: 'Error: Movie Title Does Not Exists'});
+                }
+            })
+        }
+
+    });
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+router.route('/movies')
+    .get(authJwtController.isAuthenticated, function (req, res) {
+
+        //if (err) throw (err);
+        if (req.header.reviews = 'true') {
+            movies.aggregate([
+                {
+                    $lookup: {
+                        from: "reviews",
+                        localField: "title",
+                        foreignField: "movTitle",
+                        as: 'Review'
+                    }
+                }
+            ], function (err, result) {
+                if (err) {res.send(err);}
+                else res.send({movies: result});
+            })
+        }
+        else {
+            movies.find(function (err, movies) {
+                if (err)
+                    res.send(err);
+
+                res.json(movies);
+            });
+        }
+    });
 router.route('/SAVEmovies')
     .post(authJwtController.isAuthenticated, function (req, res) {
         if (!req.body.title || !req.body.yearReleased || !req.body.genre || !req.body.actors && req.body.actors.length) {
@@ -162,6 +223,8 @@ router.post('/signin', function (req, res) {
 
     });
 });
+
+
 
 app.use('/', router);
 app.listen(process.env.PORT || 8080);
